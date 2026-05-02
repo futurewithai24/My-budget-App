@@ -3,27 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>家族収支管理 v6.5.6</title>
+  <title>家族収支管理 v6.6.0</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root { --line-green: #06C755; --line-blue: #007bff; --bg-gray: #f0f2f5; }
     body { font-family: -apple-system, sans-serif; background: var(--bg-gray); margin: 0; padding: 10px; }
     .container { background: white; border-radius: 16px; padding: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 500px; margin: auto; }
-    
+
     /* メニュータブ */
     .tab-menu, .type-menu { display: flex; background: #eee; border-radius: 10px; padding: 4px; margin-bottom: 15px; }
     .tab, .type-btn { flex: 1; padding: 10px; text-align: center; cursor: pointer; border-radius: 8px; color: #666; font-size: 14px; }
     .tab.active { background: white; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .type-btn.active.expense { background: white; color: #d9534f; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .type-btn.active.income { background: white; color: var(--line-blue); font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    
+
     .page { display: none; }
     .page.active { display: block; }
 
     label { display: block; margin: 10px 0 5px; font-size: 13px; color: #555; font-weight: bold; }
     input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 14px; margin-bottom: 8px; }
-    
+
     /* 履歴フィルタ */
     .filter-box { background: #f9f9f9; padding: 10px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #eee; }
     .filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -41,7 +41,7 @@
     .list-item { border-bottom: 1px solid #f0f0f0; padding: 12px 0; display: flex; justify-content: space-between; align-items: center; }
     .income-text { color: var(--line-blue); }
     .expense-text { color: #d9534f; }
-    
+
     /* 画像表示ボタン */
     .image-link-btn {
       background: #f0f0f0;
@@ -62,12 +62,36 @@
     /* 送信ボタン */
     #submitBtn { background: var(--line-green); color: white; border: none; width: 100%; padding: 15px; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; }
     #submitBtn:disabled { background: #ccc; }
-    
+
     /* グラフ */
     .chart-section { margin-top: 20px; text-align: center; }
     .chart-title { font-size: 14px; font-weight: bold; color: #666; margin-bottom: 10px; }
     .chart-container { position: relative; width: 100%; margin: auto; margin-bottom: 30px; }
     .doughnut-container { width: min(100%, 320px); margin-left: auto; margin-right: auto; }
+
+    /* 支払方法チェック */
+    .payment-check-group { display: flex; gap: 10px; margin-bottom: 8px; }
+    .payment-check-label { flex: 1; cursor: pointer; }
+    .payment-check-label input[type="checkbox"] { display: none; }
+    .payment-check-btn {
+      display: block; padding: 10px; text-align: center; border-radius: 8px;
+      border: 2px solid #ddd; font-size: 14px; font-weight: bold; color: #999;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .payment-check-label input:checked + .payment-check-btn.credit {
+      border-color: #007bff; color: #007bff; background: #e8f0fe;
+    }
+    .payment-check-label input:checked + .payment-check-btn.paypay {
+      border-color: #e8192c; color: #e8192c; background: #fde8ea;
+    }
+
+    /* 支払方法バッジ（履歴表示） */
+    .pm-badge {
+      display: inline-block; padding: 2px 6px; border-radius: 4px;
+      font-size: 10px; font-weight: bold; vertical-align: middle; margin-left: 4px;
+    }
+    .pm-badge.credit { background: #e8f0fe; color: #007bff; }
+    .pm-badge.paypay { background: #fde8ea; color: #e8192c; }
   </style>
 </head>
 <body>
@@ -87,6 +111,17 @@
     <label>カテゴリ</label><select id="category"></select>
     <label>金額</label><input type="number" id="amount" placeholder="金額" inputmode="numeric">
     <label>内容 / 支払先</label><input type="text" id="shop" placeholder="例: 給与、スーパー">
+    <label>支払方法</label>
+    <div class="payment-check-group">
+      <label class="payment-check-label">
+        <input type="checkbox" id="checkCredit" onchange="handlePaymentCheck('credit')">
+        <span class="payment-check-btn credit">💳 クレカ</span>
+      </label>
+      <label class="payment-check-label">
+        <input type="checkbox" id="checkPaypay" onchange="handlePaymentCheck('paypay')">
+        <span class="payment-check-btn paypay">🔴 PayPay</span>
+      </label>
+    </div>
     <label>日付</label><input type="date" id="date">
     <label>写真 (最大3枚)</label>
     <div class="photo-buttons">
@@ -117,7 +152,7 @@
       <select id="summaryYear" onchange="applySummaryFilters()"><option value="">年</option></select>
       <select id="summaryMonth" onchange="applySummaryFilters()"><option value="">月</option></select>
     </div></div>
-    
+
     <div class="chart-section">
       <div class="chart-title">支出内訳</div>
       <div class="chart-container doughnut-container" style="height: 320px;">
@@ -137,13 +172,13 @@
 <script>
   const LIFF_ID = "2009863857-yW268YAg";
   const GAS_URL = "https://script.google.com/macros/s/AKfycby32oRWaazKI5sq2BuelVUmOZ1ybrx_yFd1XVx-Sl4apnMNtkw9fhjKmZDSmzIPPw0a/exec";
-  
+
   let currentType = "出金";
   let imageBlobs = [];
   let allData = [];
   let myChart = null;
   let myBarChart = null;
-  let userList = []; // ユーザーリスト（LINE IDと名前のマッピング用）
+  let userList = [];
   const categories = {
     "出金": ["電気代", "水道代", "ガス代", "CATV代", "外食", "通信費", "ガソリン代", "レンタカー代", "高速代", "交通費", "冠婚葬祭", "実家修繕", "旅費交通費", "宿泊代", "飲食代", "嗜好品", "他"],
     "入金": ["給与", "賞与", "副業", "還付金", "お小遣い", "年金", "冠婚葬祭", "他"]
@@ -158,13 +193,12 @@
       return liff.getProfile();
     }).then(async (p) => {
       if (!p) return;
-      
-      // 自動ユーザー登録を実行
+
       await callGas("register", { userId: p.userId, displayName: p.displayName });
-      
+
       document.getElementById('submitBtn').disabled = false;
       document.getElementById('submitBtn').innerText = "登録する";
-      
+
       updateCategoryOptions();
       initFilters();
     }).catch(err => {
@@ -186,30 +220,26 @@
    */
   async function initFilters() {
     const res = await callGas("getUsers", {});
-    userList = res.result || []; // [{lineId: "xxx", name: "太郎"}, ...]
-    
-    // ユーザー選択肢（値はlineId、表示は名前）
+    userList = res.result || [];
+
     const userSels = [document.getElementById('filterUser'), document.getElementById('summaryUser')];
     userSels.forEach(s => {
       s.innerHTML = '<option value="">全員</option>';
       userList.forEach(u => s.add(new Option(u.name, u.lineId)));
     });
-    
-    // 年選択肢 (2025〜2030)
+
     const yearSels = [document.getElementById('filterYear'), document.getElementById('summaryYear')];
     yearSels.forEach(s => {
       s.innerHTML = '<option value="">年</option>';
       for(let y=2025; y<=2030; y++) s.add(new Option(y + "年", y));
     });
 
-    // 月選択肢 (1〜12)
     const monthSels = [document.getElementById('filterMonth'), document.getElementById('summaryMonth')];
     monthSels.forEach(s => {
       s.innerHTML = '<option value="">月</option>';
       for(let m=1; m<=12; m++) s.add(new Option(m + "月", m));
     });
 
-    // カテゴリ選択肢
     const allCats = [...new Set([...categories["出金"], ...categories["入金"]])].sort();
     const catSels = [document.getElementById('filterCategory'), document.getElementById('summaryCategory')];
     catSels.forEach(s => {
@@ -234,6 +264,17 @@
     categories[currentType].forEach(c => sel.add(new Option(c, c)));
   }
 
+  function handlePaymentCheck(type) {
+    if (type === 'credit') document.getElementById('checkPaypay').checked = false;
+    else document.getElementById('checkCredit').checked = false;
+  }
+
+  function getPaymentMethod() {
+    if (document.getElementById('checkCredit').checked) return 'クレカ';
+    if (document.getElementById('checkPaypay').checked) return 'PayPay';
+    return '';
+  }
+
   /**
    * 5. ページ切り替え
    */
@@ -255,7 +296,7 @@
   }
 
   function applyFilters() {
-    const u = document.getElementById('filterUser').value; // lineId
+    const u = document.getElementById('filterUser').value;
     const c = document.getElementById('filterCategory').value;
     const y = document.getElementById('filterYear').value;
     const m = document.getElementById('filterMonth').value;
@@ -275,15 +316,20 @@
       total += isInc ? item.amount : -item.amount;
       const div = document.createElement('div');
       div.className = 'list-item';
-      
-      // 画像ボタンの生成 (別タブで開く方式)
+
       const imageButtons = item.imageUrls.map((url, index) => {
         return `<button class="image-link-btn" onclick="window.open('${url}', '_blank')">📷 写真${index+1}</button>`;
       }).join('');
 
+      const pmBadge = item.paymentMethod === 'クレカ'
+        ? '<span class="pm-badge credit">💳 クレカ</span>'
+        : item.paymentMethod === 'PayPay'
+        ? '<span class="pm-badge paypay">🔴 PayPay</span>'
+        : '';
+
       div.innerHTML = `
         <div>
-          <div class="item-main">${item.shop} [${item.category}]</div>
+          <div class="item-main">${item.shop} [${item.category}]${pmBadge}</div>
           <div style="font-size:11px; color:#999;">${item.date} (${item.userName})</div>
         </div>
         <div style="text-align:right">
@@ -301,25 +347,24 @@
    * 7. サマリー表示
    */
   function applySummaryFilters() {
-    const u = document.getElementById('summaryUser').value; // lineId
+    const u = document.getElementById('summaryUser').value;
     const c = document.getElementById('summaryCategory').value;
     const y = document.getElementById('summaryYear').value;
     const m = document.getElementById('summaryMonth').value;
-    
+
     const balanceData = allData.filter(d => {
       const dt = new Date(d.date);
       return (!u || d.lineId === u) && (!y || dt.getFullYear() == y) && (!m || (dt.getMonth()+1) == m);
     });
 
     const expenseData = balanceData.filter(d => d.type === "出金" && (!c || d.category === c));
-    
-    // LINE IDから名前を取得
+
     let centerName = "全員";
     if (u) {
       const user = userList.find(usr => usr.lineId === u);
       centerName = user ? user.name : u;
     }
-    
+
     let period = (y ? y + "年" : "") + (m ? m + "月" : "") || "全期間";
     renderSummary(expenseData, balanceData, centerName, c, period);
   }
@@ -327,7 +372,7 @@
   function renderSummary(expenseData, balanceData, name, cat, period) {
     const stats = {}; let expTotal = 0;
     expenseData.forEach(d => { expTotal += d.amount; stats[d.category] = (stats[d.category] || 0) + d.amount; });
-    
+
     let incSum = 0, expSum = 0;
     balanceData.forEach(d => { if (d.type === "入金") incSum += d.amount; else expSum += d.amount; });
 
@@ -420,13 +465,14 @@
     if (!amt) return alert("金額を入力してください");
     const btn = document.getElementById('submitBtn');
     btn.disabled = true; btn.innerText = "送信中...";
-    
+
     try {
       const p = await liff.getProfile();
       const res = await callGas("upload", {
         lineId: p.userId, userName: p.displayName, type: currentType, amount: Number(amt),
         category: document.getElementById('category').value, shop: document.getElementById('shop').value || "未設定",
-        date: document.getElementById('date').value, imageBlobs: imageBlobs
+        date: document.getElementById('date').value, imageBlobs: imageBlobs,
+        paymentMethod: getPaymentMethod()
       });
       if (res.status === "success") { alert("完了！"); location.reload(); }
       else { throw new Error("APIエラー"); }
