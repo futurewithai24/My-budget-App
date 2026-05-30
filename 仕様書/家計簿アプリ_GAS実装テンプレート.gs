@@ -6,18 +6,12 @@
  * 使い方:
  * 1) このコードをApps Scriptに貼り付け
  * 2) SPREADSHEET_ID を対象スプレッドシートIDに変更
- * 3) 画像保存先フォルダIDは「スクリプトのプロパティ」にのみ設定する（Gitに載せない）
- *    - エディタ左「プロジェクトの設定」（歯車）→「スクリプトのプロパティ」→「スクリプトのプロパティを表示」
- *    - プロパティ: IMAGE_DRIVE_FOLDER_ID / 値: GoogleドライブのフォルダURL末尾のID
- *    未設定の場合は、マイドライブ直下の IMAGE_FOLDER_NAME（既定「画像」）を検索し、無ければ作成して保存する
- * 4) Webアプリとしてデプロイ（実行ユーザー: 自分、アクセス: 全員）
+ * 3) Webアプリとしてデプロイ（実行ユーザー: 自分、アクセス: 全員）
+ *
+ * 画像: 実行ユーザーのマイドライブ直下に保存（専用フォルダ指定はしない簡易版）
  */
 
 const SPREADSHEET_ID = "YOUR_SPREADSHEET_ID";
-/** スクリプトのプロパティ名（値にドライブの画像フォルダIDを設定） */
-const SCRIPT_PROP_IMAGE_FOLDER_ID = "IMAGE_DRIVE_FOLDER_ID";
-/** スクリプトプロパティ未設定時に使うフォルダ名（マイドライブ直下） */
-const IMAGE_FOLDER_NAME = "画像";
 const USERS_SHEET = "users";
 const TX_SHEET = "transactions";
 const TZ = "Asia/Tokyo";
@@ -167,36 +161,10 @@ function getTransactions_() {
     });
 }
 
-/**
- * スクリプトのプロパティ IMAGE_DRIVE_FOLDER_ID に設定したフォルダIDを返す（未設定は空文字）。
- */
-function getImageDriveFolderIdFromProps_() {
-  const raw = PropertiesService.getScriptProperties().getProperty(SCRIPT_PROP_IMAGE_FOLDER_ID);
-  return safeTrim_(raw).replace(/^["']|["']$/g, "");
-}
-
-/**
- * レシート画像の保存先フォルダを返す。
- * - スクリプトプロパティ IMAGE_DRIVE_FOLDER_ID があればそのフォルダ
- * - 未設定ならマイドライブ直下の IMAGE_FOLDER_NAME を検索、無ければ作成
- */
-function getImageParentFolder_() {
-  const id = getImageDriveFolderIdFromProps_();
-  if (id) {
-    return DriveApp.getFolderById(id);
-  }
-  const name = safeTrim_(IMAGE_FOLDER_NAME) || "画像";
-  const root = DriveApp.getRootFolder();
-  const it = root.getFoldersByName(name);
-  if (it.hasNext()) return it.next();
-  return root.createFolder(name);
-}
-
 function saveImages_(imageBlobs, lineId) {
   if (!imageBlobs.length) return [];
 
-  const parent = getImageParentFolder_();
-  const root = DriveApp.getRootFolder();
+  // 簡易版: 実行ユーザーのマイドライブ直下に保存（フォルダ指定なし）
   const urls = [];
   imageBlobs.forEach((dataUrl, i) => {
     const parsed = parseDataUrl_(dataUrl);
@@ -205,14 +173,7 @@ function saveImages_(imageBlobs, lineId) {
     const ext = mimeToExt_(parsed.mimeType);
     const fileName = `${lineId}_${Utilities.formatDate(new Date(), TZ, "yyyyMMdd_HHmmss")}_${i + 1}.${ext}`;
     const blob = Utilities.newBlob(parsed.bytes, parsed.mimeType, fileName);
-    // マイドライブ直下に一度作成し、目的フォルダへ移す（環境によって createFile の置き場所がずれる対策）
     const file = DriveApp.createFile(blob);
-    parent.addFile(file);
-    try {
-      root.removeFile(file);
-    } catch (e) {
-      // 既にルート外のみにある場合などは無視
-    }
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     urls.push(file.getUrl());
   });
